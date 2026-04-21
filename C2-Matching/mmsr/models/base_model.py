@@ -10,6 +10,11 @@ import mmsr.models.lr_scheduler as lr_scheduler
 
 logger = logging.getLogger('base')
 
+"""
+这个基类的主要作用是将模型训练中通用且繁琐的工程化逻辑封装起来，
+让开发者在编写新模型时，只需要继承这个基类并专注于模型结构和前向传播，
+而不需要重复写设备转移、学习率衰减、保存/读取权重等基础代码。
+"""
 
 class BaseModel():
     """Base model.
@@ -23,7 +28,7 @@ class BaseModel():
 
         self.opt = opt
         self.device = torch.device(
-            'cuda' if opt['gpu_ids'] is not None else 'cpu')
+                    'cuda' if opt['gpu_ids'] is not None else 'cpu')
         self.is_train = opt['is_train']
         self.schedulers = []
         self.optimizers = []
@@ -112,6 +117,10 @@ class BaseModel():
         if isinstance(net, nn.DataParallel) or isinstance(
                 net, DistributedDataParallel):
             net = net.module
+
+        # map(function, iterable):将function作用在iterable中的每一个对象
+        # numel():pytorch中计算张量中所有元素的方法
+        # net.parameters()返回生成器，其中包含了模型所有需要学习的参数[tensor1, tensor2, ...]
         return str(net), sum(map(lambda x: x.numel(), net.parameters()))
 
     @master_only

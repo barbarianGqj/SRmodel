@@ -4,6 +4,13 @@ import torch
 import torch.nn as nn
 import torchvision.models.vgg as vgg
 
+# TODO: 这里说法有错误
+""" 
+这里允许取出不同层的输出，使用的vgg的权重是官方在image_net上训练得到的。这里提取出来的特征是为了重建，即超分。因此需要浅层和中层的特征向量
+而在contras_extractor_arch中的vgg的权重是作者自己训练得到的，是希望通过训练使得从LR和HR_ref相似区域提取出来特征向量尽量接近
+也因此在corres_generation_arch中调用了两次vgg，分别对应了两种vgg
+"""
+
 NAMES = {
     'vgg11': [
         'conv1_1', 'relu1_1', 'pool1', 'conv2_1', 'relu2_1', 'pool2',

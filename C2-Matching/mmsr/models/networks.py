@@ -1,5 +1,9 @@
 from mmsr.models.archs import _arch_modules
-
+"""
+找到 mmsr/models/archs 这个目录。
+发现这是一个包，于是立即加载并运行 archs/__init__.py
+在 __init__.py 运行完毕后，Python 会在它的“内存空间”（命名空间）里寻找名为 _arch_modules 的东西。
+"""
 
 def dynamical_instantiation(modules, cls_type, opt):
     """Dynamically instantiate class.
@@ -7,15 +11,15 @@ def dynamical_instantiation(modules, cls_type, opt):
     Args:
         modules (list[importlib modules]): List of modules from importlib
         files.
-        cls_type (str): Class type.
-        opt (dict): Class initialization kwargs.
+        cls_type (str): Class type. Class name
+        opt (dict): Class initialization kwargs. 参数字典  cls_type和opt都定义在配置文件中
 
     Returns:
         class： Instantiated class.
     """
 
     for module in modules:
-        cls_ = getattr(module, cls_type, None)
+        cls_ = getattr(module, cls_type, None)  # 在module（Python 文件）里，寻找名字叫 cls_type 的类（或函数/变量）
         if cls_ is not None:
             break
     if cls_ is None:
@@ -50,7 +54,7 @@ def define_net_map(opt):
 
 
 def define_net_extractor(opt):
-    opt_net = opt['network_extractor']
+    opt_net = opt['network_extractor']。
     network_type = opt_net.pop('type')
 
     net_extractor = dynamical_instantiation(_arch_modules, network_type,

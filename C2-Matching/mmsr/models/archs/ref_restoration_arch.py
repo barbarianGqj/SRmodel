@@ -60,8 +60,7 @@ class RestorationNet(nn.Module):
         base = F.interpolate(x, None, 4, 'bilinear', False)
         content_feat = self.content_extractor(x)
 
-        upscale_restore = self.dyn_agg_restore(content_feat, pre_offset,
-                                               img_ref_feat)
+        upscale_restore = self.dyn_agg_restore(content_feat, pre_offset, img_ref_feat)
         return upscale_restore + base
 
 

@@ -30,17 +30,17 @@ class RefRestorationModel(SRModel):
         self.net_extractor = self.model_to_device(self.net_extractor)
         self.print_network(self.net_extractor)
         # load pretrained feature extractor
-        load_path = self.opt['path'].get('pretrain_model_feature_extractor',
-                                         None)
+        load_path = self.opt['path'].get('pretrain_model_feature_extractor', None)
         if load_path is not None:
-            self.load_network(self.net_extractor, load_path,
+            self.load_network(self.net_extractor, load_path, 
                               self.opt['path']['strict_load'])
-
-        # load pretrained models
+        """重复段，和父类初始化内容重复
+        # load pretrained generator models
         load_path = self.opt['path'].get('pretrain_model_g', None)
         if load_path is not None:
             self.load_network(self.net_g, load_path,
                               self.opt['path']['strict_load'])
+        """
         if self.is_train:
             self.net_g.train()
 
@@ -67,7 +67,7 @@ class RefRestorationModel(SRModel):
                     else:
                         optim_params_g.append(v)
 
-            self.optimizer_g = torch.optim.Adam(
+            self.optimizer_g = torch.optim.Adam( # 为dcn网络的不同规模的偏移层设置不同的学习率，使模型收敛的更好
                 [{
                     'params': optim_params_g
                 }, {
@@ -80,9 +80,9 @@ class RefRestorationModel(SRModel):
                     'params': optim_params_relu2_offset,
                     'lr': train_opt['lr_relu2_offset']
                 }],
-                lr=train_opt['lr_g'],
-                weight_decay=weight_decay_g,
-                betas=train_opt['beta_g'])
+                lr=train_opt['lr_g'], # 全局的lr，如果在[]中没有指定，默认使用这个
+                weight_decay=weight_decay_g, # L_2正则化，权重衰减策略的系数
+                betas=train_opt['beta_g']) # [beta1, beta2]，详见关于Adam优化器中如何控制梯度更新的方向和权重
 
             self.optimizers.append(self.optimizer_g)
 
@@ -104,7 +104,7 @@ class RefRestorationModel(SRModel):
             self.net_d = None
 
         if self.net_d:
-            self.net_d.train()
+            self.net_d.train() # net_d的类对象继承自nn.module，所以有train()方法
 
         # define losses
         if train_opt['pixel_weight'] > 0:
@@ -126,16 +126,14 @@ class RefRestorationModel(SRModel):
 
         if train_opt.get('style_opt', None):
             cri_style_cls = getattr(loss_module, 'PerceptualLoss')
-            self.cri_style = cri_style_cls(**train_opt['style_opt']).to(
-                self.device)
+            self.cri_style = cri_style_cls(**train_opt['style_opt']).to(self.device)
         else:
             logger.info('Remove style loss.')
             self.cri_style = None
 
         if train_opt.get('texture_opt', None):
             cri_texture_cls = getattr(loss_module, 'TextureLoss')
-            self.cri_texture = cri_texture_cls(**train_opt['texture_opt']).to(
-                self.device)
+            self.cri_texture = cri_texture_cls(**train_opt['texture_opt']).to(self.device)
         else:
             logger.info('Remove texture loss.')
             self.cri_texture = None
@@ -148,12 +146,10 @@ class RefRestorationModel(SRModel):
                 fake_label_val=0.0,
                 loss_weight=train_opt['gan_weight']).to(self.device)
 
-            if train_opt['grad_penalty_weight'] > 0:
-                cri_grad_penalty_cls = getattr(loss_module,
-                                               'GradientPenaltyLoss')
+            if train_opt['grad_penalty_weight'] > 0:  # GAN中对判别器的约束，避免训练的太快
+                cri_grad_penalty_cls = getattr(loss_module, 'GradientPenaltyLoss')
                 self.cri_grad_penalty = cri_grad_penalty_cls(
-                    loss_weight=train_opt['grad_penalty_weight']).to(
-                        self.device)
+                    loss_weight=train_opt['grad_penalty_weight']).to(self.device)
             else:
                 logger.info('Remove gradient penalty.')
                 self.cri_grad_penalty = None
@@ -162,11 +158,9 @@ class RefRestorationModel(SRModel):
             self.cri_gan = None
 
         # we need to train the net_g with only pixel loss for several steps
-        self.net_g_pretrain_steps = train_opt['net_g_pretrain_steps']
-        self.net_d_steps = train_opt['net_d_steps'] if train_opt[
-            'net_d_steps'] else 1
-        self.net_d_init_steps = train_opt['net_d_init_steps'] if train_opt[
-            'net_d_init_steps'] else 0
+        self.net_g_pretrain_steps = train_opt['net_g_pretrain_steps']                                 # 生成器先预训练步数
+        self.net_d_steps = train_opt['net_d_steps'] if train_opt['net_d_steps'] else 1                # 判别器更新的频率，设为1则生成器和判别器一步一步更新，否则即判别器隔几步在更新
+        self.net_d_init_steps = train_opt['net_d_init_steps'] if train_opt['net_d_init_steps'] else 0 # 判别器预训练步数
 
         # optimizers
         if self.net_d:
@@ -190,18 +184,16 @@ class RefRestorationModel(SRModel):
         self.match_img_in = data['img_in_up'].to(self.device)
 
     def optimize_parameters(self, step):
-        self.features = self.net_extractor(self.match_img_in, self.img_ref)
-        self.pre_offset, self.img_ref_feat = self.net_map(
-            self.features, self.img_ref)
-        self.output = self.net_g(self.img_in_lq, self.pre_offset,
-                                 self.img_ref_feat)
+        self.features = self.net_extractor(self.match_img_in, self.img_ref)            # [features1(img_in), features2(ing_ref)]
+        self.pre_offset, self.img_ref_feat = self.net_map(self.features, self.img_ref) # pre_offset (dict): {key(relu1,2,3): value(offset matrix)}  img_ref_feat : vgg(img_ref_hr)
+        self.output = self.net_g(self.img_in_lq, self.pre_offset, self.img_ref_feat)   # img_in_lq : img to be SR
 
         if step <= self.net_g_pretrain_steps:
-            # pretrain the net_g with pixel Loss
-            self.optimizer_g.zero_grad()
-            l_pix = self.cri_pix(self.output, self.gt)
-            l_pix.backward()
-            self.optimizer_g.step()
+            # pretrain the net_g with pixel Loss 预训练生成器（GAN的训练策略）
+            self.optimizer_g.zero_grad() # 梯度清空
+            l_pix = self.cri_pix(self.output, self.gt)  # 计算pixel损失
+            l_pix.backward() # 反向传播，将计算图中需要更新梯度的参数的grad属性赋值为梯度值
+            self.optimizer_g.step() # 梯度更新，利用grad计算更新后的参数值
 
             # set log
             self.log_dict['l_pix'] = l_pix.item()
@@ -224,8 +216,7 @@ class RefRestorationModel(SRModel):
                 self.log_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
                 l_d_total = l_d_real + l_d_fake
                 if self.cri_grad_penalty:
-                    l_grad_penalty = self.cri_grad_penalty(
-                        self.net_d, self.gt, self.output)
+                    l_grad_penalty = self.cri_grad_penalty(self.net_d, self.gt, self.output)
                     self.log_dict['l_grad_penalty'] = l_grad_penalty.item()
                     l_d_total += l_grad_penalty
                 l_d_total.backward()
@@ -239,7 +230,7 @@ class RefRestorationModel(SRModel):
 
             l_g_total = 0
             if (step - self.net_g_pretrain_steps) % self.net_d_steps == 0 and (
-                    step - self.net_g_pretrain_steps) > self.net_d_init_steps:
+                    step - self.net_g_pretrain_steps) > self.net_d_init_steps: # 先生成器预训练，然后判别器预训练，接下来才会正常的训练，正常训练逻辑是判别器每一步都更新，但是生成器隔net_d_steps才更新
                 if self.cri_pix:
                     l_g_pix = self.cri_pix(self.output, self.gt)
                     l_g_total += l_g_pix
@@ -253,8 +244,7 @@ class RefRestorationModel(SRModel):
                     l_g_total += l_g_style
                     self.log_dict['l_g_style'] = l_g_style.item()
                 if self.cri_texture:
-                    l_g_texture = self.cri_texture(self.output, self.maps,
-                                                   self.weights)
+                    l_g_texture = self.cri_texture(self.output, self.maps, self.weights)
                     l_g_total += l_g_texture
                     self.log_dict['l_g_texture'] = l_g_texture.item()
 

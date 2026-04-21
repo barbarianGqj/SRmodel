@@ -33,7 +33,7 @@ class L1Loss(nn.Module):
 
     Args:
         loss_weight (float): Loss weight for L1 loss. Default: 1.0.
-        reduction (str): Specifies the reduction to apply to the output.
+        reduction (str): Specifies the reduction to apply to the output.  # reduction指的是对于一个batch的每一张图像每一个像素的损失，怎么处理。包括直接返回一个向量[n,c,h,w]，返回平均值sum_loss / n*h*w，返回求和结果
             Supported choices are 'none' | 'mean' | 'sum'. Default: 'mean'.
     """
 
@@ -157,11 +157,12 @@ class PerceptualLoss(nn.Module):
             calculated and the loss will multiplied by the weight.
             Default: 0.
         norm_img (bool): If True, the image will be normed to [0, 1]. Note that
-            this is different from the `use_input_norm` which norm the input in
+            this is different from the `use_input_norm` which norm the input
             in forward function of vgg according to the statistics of dataset.
             Importantly, the input image must be in range [-1, 1].
         pretrained (str): Path for pretrained weights. Default:
             'torchvision://vgg19'
+        criterion : Default:'l1'
     """
 
     def __init__(self,
@@ -177,7 +178,7 @@ class PerceptualLoss(nn.Module):
         self.perceptual_weight = perceptual_weight
         self.style_weight = style_weight
         self.layer_weights = layer_weights
-        self.vgg = VGGFeatureExtractor(
+        self.vgg = VGGFeatureExtractor( # TODO: 搞清楚两个版本的vgg分别用在了那些地方，它们加载的权重是否有所不同
             layer_name_list=list(layer_weights.keys()),
             vgg_type=vgg_type,
             use_input_norm=use_input_norm)
@@ -186,7 +187,7 @@ class PerceptualLoss(nn.Module):
         if self.criterion_type == 'l1':
             self.criterion = torch.nn.L1Loss()
         elif self.criterion_type == 'l2':
-            self.criterion = torch.nn.L2loss()
+            self.criterion = torch.nn.L2Loss()
         elif self.criterion_type == 'fro':
             self.criterion = None
         else:
@@ -202,7 +203,7 @@ class PerceptualLoss(nn.Module):
         x_features = self.vgg(x)
         gt_features = self.vgg(gt.detach())
 
-        # calculate perceptual loss
+        # calculate perceptual loss, 关注内容和结构
         if self.perceptual_weight > 0:
             percep_loss = 0
             for k in x_features.keys():
@@ -217,7 +218,7 @@ class PerceptualLoss(nn.Module):
         else:
             percep_loss = None
 
-        # calculate style loss
+        # calculate style loss, 关注纹理和色彩分布，通过计算特征图的Gram矩阵之间的差异
         if self.style_weight > 0:
             style_loss = 0
             for k in x_features.keys():
@@ -233,8 +234,19 @@ class PerceptualLoss(nn.Module):
     def _gram_mat(self, x):
         (n, c, h, w) = x.size()
         features = x.view(n, c, w * h)
-        features_t = features.transpose(1, 2)
-        gram = features.bmm(features_t) / (c * h * w)
+        features_t = features.transpose(1, 2) # [n,w*h,c]
+        gram = features.bmm(features_t) / (c * h * w) # [n,c,c]
+        """
+        A. 捕捉特征的“相关性”
+        Gram 矩阵中的每一个元素G_{ij}代表：第i个通道和第j个通道的相似程度。
+        在 VGG 网络中，不同的通道负责检测不同的特征。比如：通道 $i$ 专门识别“亮蓝色”，通道 $j$ 专门识别“螺旋状纹理”。
+        如果 $G_{ij}$ 的值很大，说明在整张图中，只要出现了“亮蓝色”的地方，通常也会出现“螺旋状纹理”。
+        B. 丢弃空间信息（丢掉“位置”，保留“氛围”）
+        普通的卷积特征图会告诉你：左上角有一个圆，右下角有一块红色。
+        但 Gram 矩阵在计算时，是对全图所有像素求和（内积运算隐含了求和）。这意味着：它不再关心“圆”在哪里，也不关心“红色”在哪里。
+        它只关心：这张图里有多少圆，有多少红色，以及它们同时出现的频率高不高。
+        这就是我们常说的**“纹理”和“风格”**——一种全局的、重复的统计特性。
+        """
         return gram
 
 
@@ -465,10 +477,10 @@ class TextureLoss(nn.Module):
 
     def gram_matrix(self, features):
         n, c, h, w = features.size()
-        feat_reshaped = features.view(n, c, -1)
+        feat_reshaped = features.view(n, c, -1) # [n,c,h*w]
 
         # Use torch.bmm for batch multiplication of matrices
-        gram = torch.bmm(feat_reshaped, feat_reshaped.transpose(1, 2))
+        gram = torch.bmm(feat_reshaped, feat_reshaped.transpose(1, 2)) # [n,c,h*w] * [n,h*w,c]  ->  [n,c,c]
 
         return gram
 

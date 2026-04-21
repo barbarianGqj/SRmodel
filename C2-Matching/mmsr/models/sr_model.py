@@ -72,7 +72,7 @@ class SRModel(BaseModel):
 
     def setup_optimizers(self):
         train_opt = self.opt['train']
-        weight_decay_g = train_opt.get('weight_decay_g', 0)
+        weight_decay_g = train_opt.get('weight_decay_g', 0) # 正则项的系数
         optim_params = []
         for k, v in self.net_g.named_parameters():
             if v.requires_grad:

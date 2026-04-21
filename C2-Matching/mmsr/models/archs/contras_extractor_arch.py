@@ -23,17 +23,19 @@ class ContrasExtractorLayer(nn.Module):
         选择 conv3_1 的目的： 通常是为了在**语义（Semantics）和细节（Details）**之间取得平衡。
         """
         conv3_1_idx = vgg16_layers.index('conv3_1') # 拿到列表中conv3_1的索引
+        # 加载features模块（卷积层），保留从输入层到 conv3_1 的所有层。
+        # 这里虽然写的是加载预训练的权重，但实际使用时会被作者训练得到的权重覆盖 maybe
         features = getattr(vgg,
-                           'vgg16')(pretrained=True).features[:conv3_1_idx + 1] # 加载features模块（卷积层），保留从输入层到 conv3_1 的所有层。
+                           'vgg16')(pretrained=True).features[:conv3_1_idx + 1] 
         modified_net = OrderedDict()
         for k, v in zip(vgg16_layers, features):
-            modified_net[k] = v # 通过有序字典将提取出的层与 vgg16_layers 中的字符串名称一一对应，从而可以通过具体的名称访问层
+            modified_net[k] = v # 通过有序字典将提取出的层与 vgg16_layers 中的字符串名称一一对应，从而可以通过具体的名称访问层，并且方便打印时了解具体层是什么
 
         self.model = nn.Sequential(modified_net)
 
         """
         VGG 是在 ImageNet 上训练的，输入图像必须先进行标准化才能得到正确的特征。
-        当然，输入图像(RGB)首先要先约束到[0,1]，然后计算 img = (img - mean) / std
+        当然，输入图像(RGB)首先要先约束到[0,1] normalization归一化，然后计算 img = (img - mean) / std standardization标准化
         通过 register_buffer，这两个张量会随模型一起移动到 GPU/CPU，但不会被视为模型参数进行更新。
         """
         # the mean is for image with range [0, 1]
@@ -46,7 +48,7 @@ class ContrasExtractorLayer(nn.Module):
             torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, batch):
-        batch = (batch - self.mean) / self.std
+        batch = (batch - self.mean) / self.std # 标准化
         output = self.model(batch)
         return output
 
@@ -61,7 +63,7 @@ class ContrasExtractorSep(nn.Module):
 
     def forward(self, image1, image2):
         dense_features1 = self.feature_extraction_image1(image1)
-        dense_features2 = self.feature_extraction_image2(image2)
+        dense_features2 = self.feature_extraction_image2(image2) # 声明两个网络，参数不共享，但是架构相同
 
         return {
             'dense_features1': dense_features1,

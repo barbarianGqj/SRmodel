@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def reduce_loss(loss, reduction):
-    """Reduce loss as specified.
+    """Reduce loss as specified.损失归约，即将一堆损失值变成一个损失值
 
     Args:
         loss (Tensor): Elementwise loss tensor.
@@ -38,7 +38,7 @@ def mask_reduce_loss(loss, weight=None, reduction='mean'):
     # if weight is specified, apply element-wise weight
     if weight is not None:
         assert weight.dim() == loss.dim()
-        assert weight.size(1) == 1 or weight.size(1) == loss.size(1)
+        assert weight.size(1) == 1 or weight.size(1) == loss.size(1) # size(1)是channel维度的长度
         loss = loss * weight
 
     # if weight is not specified or reduction is sum, just reduce the loss
@@ -46,11 +46,11 @@ def mask_reduce_loss(loss, weight=None, reduction='mean'):
         loss = reduce_loss(loss, reduction)
     # if reduction is mean, then compute mean over masked region
     elif reduction == 'mean':
-        if weight.size(1) > 1:
+        if weight.size(1) > 1: # 每个channel都被赋予了不同的权重
             weight = weight.sum()
         else:
-            weight = weight.sum() * loss.size(1)
-        loss = loss.sum() / weight
+            weight = weight.sum() * loss.size(1) # 几个通道权重共享，但是计算平均值时应该算上被复制使用的权重
+        loss = loss.sum() / weight # 除以有效的权重
 
     return loss
 
@@ -78,7 +78,7 @@ def masked_loss(loss_func):
 
     >>> l1_loss(pred, target)
     tensor(1.3333)
-    >>> l1_loss(pred, target, weight)
+    >>> l1_loss(pred, target, weight)  loss = [1, 1, 2], weight = [1, 0, 1] "mean" ->  (1*1 + 1*0 + 2*1) / (1+0+1) -> 1.5
     tensor(1.5000)
     >>> l1_loss(pred, target, reduction='none')
     tensor([1., 1., 2.])

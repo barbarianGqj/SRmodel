@@ -290,7 +290,7 @@ def pixel_unshuffle(x, s):
 # TODO: modify it.
 def tensor_shift(x, shift=(2, 2), fill_val=0):
     """ Tensor shift.
-
+    将tensor向右下平移，超出部分直接舍弃，空余部分用fill_val填充
     Args:
         x (Tensor): the input tensor. The shape is [b, h, w, c].
         shift (tuple): shift pixel.
@@ -304,12 +304,11 @@ def tensor_shift(x, shift=(2, 2), fill_val=0):
     shift_h, shift_w = shift
     new = torch.ones_like(x) * fill_val
 
-    if shift_h >= 0 and shift_w >= 0:
-        len_h = h - shift_h
+    if shift_h >= 0 and shift_w >= 0: # 仅向右下方平移
+        len_h = h - shift_h # 平移后原张量能够保留的高度，有效高度
         len_w = w - shift_w
-        new[:, shift_h:shift_h + len_h,
-            shift_w:shift_w + len_w, :] = x.narrow(1, 0,
-                                                   len_h).narrow(2, 0, len_w)
+        new[:, shift_h:shift_h + len_h, shift_w:shift_w + len_w, :] = (          # 最后把它粘贴到new的右下角
+            x.narrow(1, 0, len_h).narrow(2, 0, len_w)) # narrow(dim, start, end) 提取x的维度1即h从0到len_h，再提取其中维度2从0到lne_w的张量，
     else:
         raise NotImplementedError
     return new
